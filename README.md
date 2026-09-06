@@ -25,7 +25,7 @@ PYTHONPATH=src python src/cotizaciones/main.py          # API en http://localhos
 Detalle completo (endpoints, verificación en `psql`, broker opcional) en
 `COMANDOS.md` y en `servicio-cotizaciones/README.md`.
 
-## Mapeo con los criterios de revisión
+## Mapeo con los criterios
 | Criterio | Dónde |
 |---|---|
 | 3 escenarios del atributo 1 (Escalabilidad) | Láminas 2-4 (E1 pico 4x, E2 expansión global 3x/4-5x, E3 fan-out de eventos) |
@@ -34,11 +34,3 @@ Detalle completo (endpoints, verificación en `psql`, broker opcional) en
 | Implementación DDD + eventos | `servicio-cotizaciones/` (dominio 9 + hexagonal 9 + BD 9 + eventos entre módulos 9 + CQS 9; ver su README) |
 | Template y indicaciones | Se llenó el template oficial sin alterar su estructura; cada escenario tiene fuente, estímulo, ambiente, artefacto, respuesta, medida, 3 decisiones con sensibilidad/tradeoff/riesgo, justificación y diagrama |
 
-## Notas exigidas por el enunciado
-- **Volúmenes**: las medidas igualan o superan el enunciado (E1: ~1.160 req/s ≥
-  4x de 25M/día; E2: 36.000 trabajos/día y ≥1.450 req/s; E3: ~7,2M eventos/día).
-- **Expansión global**: E2 (capacidad) y E5 (modificabilidad) la resuelven
-  explícitamente: país nuevo = configuración + conectores, 0 cambios en el núcleo.
-- **Medios de comunicación**: lámina 11 (dominio / integración thin / fat /
-  comandos) y su materialización en el código (`schema/v1`, despachadores).
-- **Persistencia**: PostgreSQL 16 vía `docker-compose`

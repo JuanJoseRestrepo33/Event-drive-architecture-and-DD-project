@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+*.egg-info/
+
+# Pruebas
+.pytest_cache/
+.coverage
+
+# Artefactos locales del servicio
+*.log
+*.db
+eventos_integracion.log
+test_eventos_integracion.log
+
+# Entorno / secretos
+.env
+*.env
+
+# IDE / SO
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

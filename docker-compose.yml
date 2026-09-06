@@ -1,0 +1,87 @@
+# Infraestructura local — Hogar de los Alpes (Entrega 3)
+#
+#   docker compose up -d db        -> solo Postgres (lo mínimo para correr y probar)
+#   docker compose --profile broker up -d   -> Postgres + Apache Pulsar (opcional)
+#
+# El perfil "broker" es OPCIONAL: la rúbrica exige eventos de DOMINIO entre
+# módulos (in-process, pydispatch) y un manejador de BD real. Pulsar solo se
+# necesita para ver los eventos de INTEGRACIÓN saliendo a un tópico real.
+
+services:
+
+  db:
+    image: postgres:16-alpine
+    container_name: hda-postgres
+    environment:
+      POSTGRES_USER: hda
+      POSTGRES_PASSWORD: hda
+      POSTGRES_DB: cotizaciones
+    ports:
+      - "5432:5432"
+    volumes:
+      - hda_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hda -d cotizaciones"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # ---------- Broker de eventos (OPCIONAL, perfil "broker") ----------
+  zookeeper:
+    image: apachepulsar/pulsar:3.2.0
+    container_name: hda-zookeeper
+    profiles: ["broker"]
+    command: bin/pulsar zookeeper
+    environment:
+      PULSAR_MEM: "-Xms256m -Xmx256m"
+
+  pulsar-init:
+    image: apachepulsar/pulsar:3.2.0
+    container_name: hda-pulsar-init
+    profiles: ["broker"]
+    depends_on:
+      - zookeeper
+    command: >
+      bin/pulsar initialize-cluster-metadata
+        --cluster cluster-hda
+        --zookeeper zookeeper:2181
+        --configuration-store zookeeper:2181
+        --web-service-url http://broker:8080
+        --broker-service-url pulsar://broker:6650
+
+  bookie:
+    image: apachepulsar/pulsar:3.2.0
+    container_name: hda-bookie
+    profiles: ["broker"]
+    depends_on:
+      - pulsar-init
+    environment:
+      clusterName: cluster-hda
+      zkServers: zookeeper:2181
+      metadataServiceUri: metadata-store:zk:zookeeper:2181
+      PULSAR_MEM: "-Xms256m -Xmx256m"
+    command: bash -c "bin/apply-config-from-env.py conf/bookkeeper.conf && exec bin/pulsar bookie"
+
+  broker:
+    image: apachepulsar/pulsar:3.2.0
+    container_name: hda-broker
+    profiles: ["broker"]
+    depends_on:
+      - bookie
+    environment:
+      clusterName: cluster-hda
+      zookeeperServers: zookeeper:2181
+      metadataStoreUrl: zk:zookeeper:2181
+      managedLedgerDefaultEnsembleSize: "1"
+      managedLedgerDefaultWriteQuorum: "1"
+      managedLedgerDefaultAckQuorum: "1"
+      advertisedAddress: broker
+      advertisedListeners: external:pulsar://127.0.0.1:6650
+      PULSAR_MEM: "-Xms512m -Xmx512m"
+    ports:
+      - "6650:6650"
+      - "8080:8080"
+    command: bash -c "bin/apply-config-from-env.py conf/broker.conf && exec bin/pulsar broker"
+
+volumes:
+  hda_pgdata:

@@ -5,9 +5,6 @@ Servicio del contexto acotado **Cotizaciones**, implementado siguiendo el
 seedwork y las convenciones de los tutoriales del curso (estructura de
 `aeroalpes`, CQS + Unidad de Trabajo + eventos de dominio).
 
-**Repositorio público:** <https://github.com/USUARIO/entrega3-hogar-de-los-alpes>
-<!-- TODO: reemplazar por la URL real del repositorio del equipo -->
-
 ---
 
 ## Requisitos

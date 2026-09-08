@@ -36,9 +36,9 @@ Detalle completo (endpoints, verificación en `psql`, broker opcional) en
 ## Mapeo con los criterios
 | Criterio | Dónde |
 |---|---|
-| 3 escenarios del atributo 1 (Escalabilidad) | Láminas 2-4 (E1 pico 4x, E2 expansión global 3x/4-5x, E3 fan-out de eventos) |
-| 3 escenarios del atributo 2 (Modificabilidad) | Láminas 5-7 (E4 despliegue independiente, E5 país nuevo sin tocar núcleo, E6 evolución de contrato v1→v2) |
-| 3 escenarios del atributo 3 (Disponibilidad) | Láminas 8-10 (E7 caída de pasarela, E8 pérdida de AZ del broker, E9 partner ruidoso) |
+| 3 escenarios del atributo 1 (Escalabilidad) | PPTs 2-4 (E1 pico 4x, E2 expansión global 3x/4-5x, E3 fan-out de eventos) |
+| 3 escenarios del atributo 2 (Modificabilidad) | PPTs 5-7 (E4 despliegue independiente, E5 país nuevo sin tocar núcleo, E6 evolución de contrato v1→v2) |
+| 3 escenarios del atributo 3 (Disponibilidad) | PPTs 8-10 (E7 caída de pasarela, E8 pérdida de AZ del broker, E9 partner ruidoso) |
 | Implementación DDD + eventos | [`servicio-cotizaciones/`](servicio-cotizaciones/) (dominio 9 + hexagonal 9 + BD 9 + eventos entre módulos 9 + CQS 9; ver [su README](servicio-cotizaciones/README.md)) |
 | Template y indicaciones | Se llenó el template oficial sin alterar su estructura; cada escenario tiene fuente, estímulo, ambiente, artefacto, respuesta, medida, 3 decisiones con sensibilidad/tradeoff/riesgo, justificación y diagrama |
 

@@ -1,9 +1,6 @@
 # Entrega 3 - Diseño y Experimentación
 ## Hogar de los Alpes · Equipo 16 · MISO 2026-14
 
-**Repositorio público:** <https://github.com/JuanJoseRestrepo33/Event-drive-architecture-and-DD-project>
-<!-- TODO: reemplazar por la URL real del repositorio del equipo -->
-
 ## Contenido
 - [`servicio-cotizaciones/`](servicio-cotizaciones/) — implementación del servicio con DDD + eventos
   (README propio con el mapeo detallado a la rúbrica y cómo ejecutar).

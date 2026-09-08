@@ -1,5 +1,5 @@
 # Servicio Cotizaciones de Hogar de los Alpes
-## Entrega 3 · DDD + arquitectura basada en eventos (alineado al tutorial 5 del curso)
+## Entrega 3 · DDD + arquitectura basada en eventos
 
 Servicio del contexto acotado **Cotizaciones**, implementado siguiendo el
 seedwork y las convenciones de los tutoriales del curso (estructura de

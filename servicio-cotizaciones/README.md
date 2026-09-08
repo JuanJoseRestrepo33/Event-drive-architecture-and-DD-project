@@ -2,10 +2,8 @@
 ## Entrega 3 · DDD + arquitectura basada en eventos (alineado al tutorial 5 del curso)
 
 Servicio del contexto acotado **Cotizaciones**, implementado siguiendo el
-seedwork y las convenciones de los tutoriales del curso.
-
-**Repositorio público:** <https://github.com/JuanJoseRestrepo33/Event-drive-architecture-and-DD-project>
-<!-- TODO: reemplazar por la URL real del repositorio del equipo -->
+seedwork y las convenciones de los tutoriales del curso (estructura de
+`aeroalpes`, CQS + Unidad de Trabajo + eventos de dominio).
 
 ---
 

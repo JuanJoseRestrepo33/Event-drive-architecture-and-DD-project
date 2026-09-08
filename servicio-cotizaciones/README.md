@@ -2,10 +2,9 @@
 ## Entrega 3 · DDD + arquitectura basada en eventos (alineado al tutorial 5 del curso)
 
 Servicio del contexto acotado **Cotizaciones**, implementado siguiendo el
-seedwork y las convenciones de los tutoriales del curso (estructura de
-`aeroalpes`, CQS + Unidad de Trabajo + eventos de dominio).
+seedwork y las convenciones de los tutoriales del curso.
 
-**Repositorio público:** <https://github.com/USUARIO/entrega3-hogar-de-los-alpes>
+**Repositorio público:** <https://github.com/JuanJoseRestrepo33/Event-drive-architecture-and-DD-project>
 <!-- TODO: reemplazar por la URL real del repositorio del equipo -->
 
 ---
@@ -17,14 +16,31 @@ seedwork y las convenciones de los tutoriales del curso (estructura de
 
 ## Cómo ejecutar
 
+> **Importante:** el comando del paso 1 se ejecuta desde la raíz del repositorio
+> (donde está `docker-compose.yml`). A partir del paso 2, todos los comandos
+> deben ejecutarse dentro de la carpeta `servicio-cotizaciones/`.
+
 ### 1. Levantar la base de datos (PostgreSQL)
 
+**Desde la raíz del repositorio:**
 ```bash
 docker compose up -d db
 docker compose ps          # esperar a que 'hda-postgres' esté healthy
 ```
 
+**O, si prefieres quedarte dentro de `servicio-cotizaciones/`**, apunta al
+`docker-compose.yml` de la raíz con `-f`:
+```bash
+docker compose -f ../docker-compose.yml up -d db
+docker compose -f ../docker-compose.yml ps
+```
+
 ### 2. Crear el entorno e instalar dependencias
+
+**Ubícate primero en esta carpeta:**
+```bash
+cd servicio-cotizaciones
+```
 
 **Windows (PowerShell):**
 ```powershell
@@ -58,6 +74,7 @@ PYTHONPATH=src python src/cotizaciones/main.py
 
 ### 4. Probar los endpoints
 
+**Linux / macOS / Git Bash:**
 ```bash
 # Comando: crear cotización (lado C de CQS) -> 202 Accepted
 curl -X POST http://localhost:5000/cotizaciones \
@@ -76,11 +93,49 @@ curl "http://localhost:5000/cotizaciones?trabajo=TRB-001"
 curl -X POST http://localhost:5000/cotizaciones/<ID>/aceptar
 ```
 
-Para inspeccionar la BD y comprobar la persistencia real:
+**Windows (PowerShell):** el alias `curl` de PowerShell no entiende `-X`/`-d`
+de curl real, así que usa `Invoke-RestMethod`:
+```powershell
+# Comando: crear cotización (lado C de CQS) -> 202 Accepted
+$body = @{
+    id_trabajo       = "TRB-001"
+    id_proveedor     = "PRV-9"
+    monto            = 250000
+    moneda           = "COP"
+    categoria        = "plomeria"
+    descripcion      = "cambio de tuberia"
+    vigencia_desde   = "2026-01-01T00:00:00"
+    vigencia_hasta   = "2030-01-01T00:00:00"
+} | ConvertTo-Json
 
+Invoke-RestMethod -Method Post -Uri "http://localhost:5000/cotizaciones" `
+    -ContentType "application/json" -Body $body
+
+# Query: consultar por id (lado Q de CQS)
+Invoke-RestMethod "http://localhost:5000/cotizaciones/<ID>"
+
+# Query: cotizaciones de un trabajo
+Invoke-RestMethod "http://localhost:5000/cotizaciones?trabajo=TRB-001"
+
+# Comando: aceptar (dispara el evento de dominio que consume el módulo pagos)
+Invoke-RestMethod -Method Post -Uri "http://localhost:5000/cotizaciones/<ID>/aceptar"
+```
+
+Para inspeccionar la BD y comprobar la persistencia real, vía `docker exec`:
+
+**Linux / macOS / Git Bash** (el `\` continúa la línea):
 ```bash
 docker exec -it hda-postgres psql -U hda -d cotizaciones -c "\dt"
 docker exec -it hda-postgres psql -U hda -d cotizaciones \
+  -c "select id_cotizacion, estado, monto from reservas_pago;"
+```
+
+**Windows (PowerShell)** — en PowerShell `\` NO es continuador de línea (se
+interpreta como argumento suelto y `psql` cae en modo interactivo); usa el
+backtick `` ` `` o pon todo en una sola línea:
+```powershell
+docker exec -it hda-postgres psql -U hda -d cotizaciones -c "\dt"
+docker exec -it hda-postgres psql -U hda -d cotizaciones `
   -c "select id_cotizacion, estado, monto from reservas_pago;"
 ```
 

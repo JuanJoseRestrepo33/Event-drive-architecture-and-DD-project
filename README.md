@@ -39,3 +39,4 @@ Detalle completo (endpoints, verificación en `psql`, broker opcional) en
 | Implementación DDD + eventos | [`servicio-cotizaciones/`](servicio-cotizaciones/) (dominio 9 + hexagonal 9 + BD 9 + eventos entre módulos 9 + CQS 9; ver [su README](servicio-cotizaciones/README.md)) |
 | Template y indicaciones | Se llenó el template oficial sin alterar su estructura; cada escenario tiene fuente, estímulo, ambiente, artefacto, respuesta, medida, 3 decisiones con sensibilidad/tradeoff/riesgo, justificación y diagrama |
 
+- [`Video de sustentación`](https://uniandes-my.sharepoint.com/:v:/g/personal/sf_barreram1_uniandes_edu_co/IQCONxu96_uGSYjDOdvXhh3OATwOJZz7lVjfstH1Nhsd3z8?nav=eyJyZWZlcnJhbEluZm8iOnsicmVmZXJyYWxBcHAiOiJPbmVEcml2ZUZvckJ1c2luZXNzIiwicmVmZXJyYWxBcHBQbGF0Zm9ybSI6IldlYiIsInJlZmVycmFsTW9kZSI6InZpZXciLCJyZWZlcnJhbFZpZXciOiJNeUZpbGVzTGlua0NvcHkifX0&e=Fbs9YV)

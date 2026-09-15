@@ -1,12 +1,38 @@
 # Entrega 4 - Prueba de Concepto (POC)
 ## Hogar de los Alpes · Arquitectura de microservicios basada en eventos
-### Equipo HdA: Sergio Fernando Barrera Molano (202517034) · Harold Andres Bartolo Moscoso (202513889) · Juan Jose Restrepo Bonilla (202516633)
+## Equipo HdA
+
+| Integrante | Código | Actividades |
+|---|---|---|
+| Sergio Fernando Barrera Molano | 202517034 | Servicio cotizaciones (event sourcing), servicio trabajos, escenario E1, docker-compose |
+| Harold Andres Bartolo Moscoso | 202513889 | Servicio pagos (idempotencia), escenario E7, pruebas |
+| Juan Jose Restrepo Bonilla | 202516633 | Servicio notificaciones, contratos v1/v2, escenario E6, README |
 
 POC de 4 microservicios comunicados por **comandos y eventos vía Apache
 Pulsar**, con topología de datos **descentralizada**, Event Sourcing + CRUD,
 y la validación ejecutable de **3 escenarios de calidad de la Entrega 3**
 (uno por atributo), probando la capacidad de la arquitectura para la
 **expansión global** del negocio.
+
+## Estructura del repositorio
+```
+entrega4-hogar-de-los-alpes/
+├── docker-compose.yml          # Pulsar + 4 servicios
+├── servicios/
+│   ├── cotizaciones/           # Event Sourcing + proyección · comandos-cotizacion · eventos-cotizacion
+│   ├── pagos/                  # CRUD idempotente · comandos-pago · eventos-pago
+│   ├── notificaciones/         # CRUD idempotente · comandos-notificacion · consume 3 tópicos
+│   └── trabajos/               # CRUD idempotente · comandos-trabajo · eventos-trabajo
+│   (cada uno: Dockerfile, requirements.txt, src/<servicio>/{seedwork,config,modulos,api,main.py})
+└── escenarios/
+    ├── contratos.py                     # factorías de mensajes del cliente (BFF/partner simulado)
+    ├── Dockerfile                       # contenedor cliente de escenarios (Modo A)
+    ├── e7_docker.sh                     # E7 en Modo A: el host para/arranca pagos por fases
+    ├── escenario_e1_escalabilidad.py
+    ├── escenario_e6_modificabilidad.py
+    ├── escenario_e7_disponibilidad.py   # crítico: sondas, RTO, cadena completa, re-entregas
+    └── validar_todo.sh                  # runner integrado (modo B)
+```
 
 ```
 [escenarios/cliente] --COMANDOS--> (Pulsar: comandos-cotizacion)
@@ -90,7 +116,7 @@ infraestructura:
 # Opción rápida (Linux/Mac/WSL): todo en un comando
 bash escenarios/validar_todo.sh     # levanta los 4 servicios, corre E1+E6+E7, apaga todo
 
-# Opción manual — Terminales 1 a 4 (una por servicio), desde la raíz del repo:
+# Opción manual - Terminales 1 a 4 (una por servicio), desde la raíz del repo:
 pip install -r servicios/cotizaciones/requirements.txt   # flask, flask-sqlalchemy, PyDispatcher
 export BROKER=archivo BROKER_DIR=$PWD/broker_dev         # en Git Bash igual
 cd servicios/cotizaciones   && PYTHONPATH=src python src/cotizaciones/main.py    # :5001
@@ -114,7 +140,7 @@ Salida real de la validación integrada (`validar_todo.sh`, modo B):
 == E7 [1/4] deteniendo PAGOS (simula caída de la pasarela 30 min) ==
    pagos: caído (sin respuesta HTTP)
    núcleo: 15/15 aceptadas y publicadas · disponibilidad 100% (10/10 sondas) · pagos sigue caído: True
-== E7 [2/4] rearrancando PAGOS — el broker debe entregar TODO lo retenido ==
+== E7 [2/4] rearrancando PAGOS - el broker debe entregar TODO lo retenido ==
    RTO = 0.5s hasta drenar · reservas 15/15 · perdidos = 0
 == E7 [3/4] cierre del ciclo: PagoRetenido -> trabajo AGENDADO ==
    trabajos agendados 15/15
@@ -143,16 +169,16 @@ puede esperar"): el cobro es una dependencia externa frágil y NO puede
 arrastrar al núcleo. La POC lo verifica con cuatro mediciones, no con una
 afirmación:
 
-1. **Disponibilidad del núcleo durante la caída** — sondas HTTP a
+1. **Disponibilidad del núcleo durante la caída** - sondas HTTP a
    cotizaciones mientras pagos está muerto: 10/10 = 100 %. Además el
    núcleo sigue creando/aceptando (15/15 eventos publicados al tópico).
-2. **RPO = 0** — el broker retiene cada `CotizacionAceptada` hasta que un
+2. **RPO = 0** - el broker retiene cada `CotizacionAceptada` hasta que un
    consumidor lo confirme (`acknowledge` en Pulsar / offset en el adaptador
    de archivo). Al volver pagos: reservas 15/15, perdidos = 0.
-3. **RTO medido** — del rearranque al drenaje completo (0,5 s en la POC;
+3. **RTO medido** - del rearranque al drenaje completo (0,5 s en la POC;
    en producción crece con el backlog, por eso el escenario de la Entrega 3
    fija < 5 min).
-4. **Duplicados = 0 probado activamente** — se re-publican 5 copias exactas
+4. **Duplicados = 0 probado activamente** - se re-publican 5 copias exactas
    de eventos ya procesados (la re-entrega *at-least-once* que hace un
    broker tras un fallo) y pagos/trabajos los ignoran gracias a la tabla
    `eventos_procesados` escrita **en la misma transacción** que el efecto.
@@ -166,7 +192,7 @@ no es solo del primer salto.
 **Expansión global** (nota del enunciado): el campo `pais` del comando y del
 evento v2, el VO `Dinero` multi-moneda (COP/MXN/BRL/ARS) y el escenario E6
 demuestran que habilitar un país nuevo es **dato + evolución compatible de
-contrato**, no re-arquitectura — la misma tesis de E2/E5 de la Entrega 3.
+contrato**, no re-arquitectura - la misma tesis de E2/E5 de la Entrega 3.
 
 ---
 
@@ -174,7 +200,7 @@ contrato**, no re-arquitectura — la misma tesis de E2/E5 de la Entrega 3.
 
 ### 1. Microservicios con comandos y eventos vía Apache Pulsar
 - `docker-compose.yml` despliega un clúster Pulsar standalone y los **4 microservicios** (cotizaciones, pagos, notificaciones, trabajos).
-- **Comandos**: cada servicio tiene su tópico de comandos — `comandos-cotizacion` (`CrearCotizacion`, `AceptarCotizacion`), `comandos-pago` (`RetenerPago`), `comandos-trabajo` (`AgendarTrabajo`), `comandos-notificacion` (`RegistrarNotificacion`) — intención dirigida, puede rechazarse por reglas. Es la base de la saga orquestada de la Entrega 5.
+- **Comandos**: cada servicio tiene su tópico de comandos - `comandos-cotizacion` (`CrearCotizacion`, `AceptarCotizacion`), `comandos-pago` (`RetenerPago`), `comandos-trabajo` (`AgendarTrabajo`), `comandos-notificacion` (`RegistrarNotificacion`) - intención dirigida, puede rechazarse por reglas. Es la base de la saga orquestada de la Entrega 5.
 - **Eventos consumidos → comandos**: al consumir un evento de integración, cada servicio lo traduce a SU comando de aplicación y lo ejecuta con `ejecutar_commando` (mismo camino que un comando directo).
 - **Eventos** (tópicos `eventos-cotizacion`, `eventos-pago`, `eventos-trabajo`): hechos publicados tras persistir.
 - **Cero llamados síncronos entre servicios** (ni HTTP ni gRPC): cada consumidor recibe en el evento todo lo que necesita (p. ej. `PagoRetenido` ya lleva `id_trabajo` y `pais`). Los endpoints GET existen solo para clientes y para los escenarios de validación.
@@ -183,13 +209,13 @@ contrato**, no re-arquitectura — la misma tesis de E2/E5 de la Entrega 3.
 
 ### 2. Topología de datos: DESCENTRALIZADA (definida, justificada, implementada)
 Cada servicio es dueño exclusivo de su base de datos (`cotizaciones_es.db`,
-`pagos.db`, `notificaciones.db`, `trabajos.db`) — nadie lee la BD de otro; solo se
+`pagos.db`, `notificaciones.db`, `trabajos.db`) - nadie lee la BD de otro; solo se
 comparte el **contrato de mensajes**. *Justificación*: (a) autonomía de
 despliegue y evolución de esquema por equipo (el dolor del monolito de la
 Entrega 1); (b) escalado y tuning independientes por servicio (E1);
 (c) aislamiento de fallas: la caída de pagos no toca los datos de
 cotizaciones (E7). *Tradeoff asumido*: no hay joins entre servicios (se
-compone por eventos/queries) y la consistencia es eventual — exactamente
+compone por eventos/queries) y la consistencia es eventual - exactamente
 los sacrificios que el árbol de utilidad permitió (Entrega 2 §1.2).
 *Por qué no híbrida*: ningún par de servicios de este flujo comparte
 invariantes transaccionales que justifiquen BD común.
@@ -232,35 +258,35 @@ main.py
 
 ### 5. Tipos de eventos, formato y versionamiento de esquemas
 
-**Tipo de evento — integración THIN** (ids + datos esenciales) y NO carga de
+**Tipo de evento - integración THIN** (ids + datos esenciales) y NO carga de
 estado (fat): los consumidores de este flujo solo necesitan llaves, monto,
 trabajo y país; un fat event acoplaría su esquema a todos los consumidores y
 crecería sin control. Dónde SÍ usaríamos carga de estado: read models de la
 consola de agentes (escenario E3 de la Entrega 3).
 
-**Formato — JSON.** *Decisión*: el enunciado deja el formato a criterio del
+**Formato - JSON.** *Decisión*: el enunciado deja el formato a criterio del
 equipo (Avro, protobuf, JSON…). Elegimos JSON porque (a) los mensajes son
 legibles en logs, tópicos y depuración, lo que en una POC de arquitectura
 vale más que el ahorro de bytes; (b) no requiere toolchain de compilación
 de esquemas ni dependencias nativas en los 4 servicios; (c) es el formato
 natural del adaptador de archivo y del cliente Pulsar en Python. *Tradeoff
 asumido*: sin validación automática de esquema en el broker (que Avro +
-Schema Registry sí daría) — lo compensamos con contract tests en CI y con
+Schema Registry sí daría) - lo compensamos con contract tests en CI y con
 el módulo `contratos.py` como única fuente de los esquemas. Migrar a Avro
 con Pulsar Schema Registry no cambia la arquitectura: es un adaptador más.
 
-**Versionamiento — propio, en el envelope.** *Decisión*: cada mensaje lleva
+**Versionamiento - propio, en el envelope.** *Decisión*: cada mensaje lleva
 `specversion` ("v1", "v2") junto a `type`, `id`, `time`, `class`
 (comando|evento) y `service_source`. Elegimos versionado explícito por
 mensaje, y no por nombre de tópico (`eventos-cotizacion-v2`), porque
 permite que **v1 y v2 convivan en el mismo tópico** y que cada consumidor
-migre a su ritmo (escenario E6). *Política de evolución*: **BACKWARD** —
+migre a su ritmo (escenario E6). *Política de evolución*: **BACKWARD** -
 una versión nueva solo AGREGA campos opcionales (v2 de `CotizacionAceptada`
 añade `pais`), nunca renombra ni elimina; un consumidor escrito contra v1
 procesa v2 ignorando lo nuevo. Un cambio incompatible exigiría un tipo de
 evento nuevo, no una versión. Esquemas y política viven en `contratos.py`
 (Shared Kernel copiado y versionado en cada servicio; en producción,
-paquete gobernado por consenso — Entregas 2/3).
+paquete gobernado por consenso - Entregas 2/3).
 
 ### 6. Despliegue: plataforma y justificación
 
@@ -281,7 +307,7 @@ Desktop. *Por qué*:
   standalone; no se justifica aún Kubernetes.
 - **Camino de crecimiento sin rehacer nada**: las mismas imágenes pasan a
   GKE (Kubernetes) y Pulsar standalone se reemplaza por un clúster
-  administrado cuando el volumen de la expansión global lo exija — los
+  administrado cuando el volumen de la expansión global lo exija - los
   servicios no cambian, solo `BROKER_HOST`.
 
 Pasos en la VM (una vez):
@@ -295,30 +321,3 @@ curl http://<IP_PUBLICA_VM>:5001/health
 _Completar con la IP pública / captura del despliegue del equipo._
 
 ---
-
-## Estructura del repositorio
-```
-entrega4-hogar-de-los-alpes/
-├── docker-compose.yml          # Pulsar + 4 servicios
-├── servicios/
-│   ├── cotizaciones/           # Event Sourcing + proyección · comandos-cotizacion · eventos-cotizacion
-│   ├── pagos/                  # CRUD idempotente · comandos-pago · eventos-pago
-│   ├── notificaciones/         # CRUD idempotente · comandos-notificacion · consume 3 tópicos
-│   └── trabajos/               # CRUD idempotente · comandos-trabajo · eventos-trabajo
-│   (cada uno: Dockerfile, requirements.txt, src/<servicio>/{seedwork,config,modulos,api,main.py})
-└── escenarios/
-    ├── contratos.py                     # factorías de mensajes del cliente (BFF/partner simulado)
-    ├── Dockerfile                       # contenedor cliente de escenarios (Modo A)
-    ├── e7_docker.sh                     # E7 en Modo A: el host para/arranca pagos por fases
-    ├── escenario_e1_escalabilidad.py
-    ├── escenario_e6_modificabilidad.py
-    ├── escenario_e7_disponibilidad.py   # crítico: sondas, RTO, cadena completa, re-entregas
-    └── validar_todo.sh                  # runner integrado (modo B)
-```
-
-## Actividades por miembro (completar antes de subir)
-| Miembro | Actividades |
-|---|---|
-| Sergio Fernando Barrera Molano | _p. ej.: servicio cotizaciones (event sourcing), servicio trabajos, escenario E1, docker-compose_ |
-| Harold Andres Bartolo Moscoso | _p. ej.: servicio pagos (idempotencia), escenario E7, pruebas_ |
-| Juan Jose Restrepo Bonilla | _p. ej.: servicio notificaciones, contratos v1/v2, escenario E6, README_ |

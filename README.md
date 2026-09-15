@@ -1,4 +1,4 @@
-# Entrega 4 — Prueba de Concepto (POC)
+# Entrega 4 - Prueba de Concepto (POC)
 ## Hogar de los Alpes · Arquitectura de microservicios basada en eventos
 ### Equipo HdA: Sergio Fernando Barrera Molano (202517034) · Harold Andres Bartolo Moscoso (202513889) · Juan Jose Restrepo Bonilla (202516633)
 
@@ -34,7 +34,7 @@ servicios NO existe ningún llamado HTTP/gRPC: solo comandos y eventos por Pulsa
 
 ## Paso a paso de ejecución
 
-### Modo A — Apache Pulsar con Docker (entrega oficial)
+### Modo A - Apache Pulsar con Docker (entrega oficial)
 
 Requisito: Docker Desktop. Funciona igual en Windows (Git Bash), Mac y Linux:
 **todo corre en contenedores**, incluidos los escenarios, porque `pulsar-client`
@@ -80,7 +80,7 @@ duplicados). En Linux/Mac con `pip install pulsar-client` en el host también
 sirve la versión de una sola pasada: `BROKER=pulsar BROKER_HOST=localhost
 python escenarios/escenario_e7_disponibilidad.py --docker`.
 
-### Modo B — Desarrollo sin Docker (broker de archivos)
+### Modo B - Desarrollo sin Docker (broker de archivos)
 
 El broker es un **puerto** con dos adaptadores (hexagonal): `pulsar` y
 `archivo` (default). El modo B valida toda la lógica multi-proceso sin
@@ -137,7 +137,7 @@ muere con la señal; el relanzado consume exactamente los 15 eventos retenidos y
 | E6 | **Modificabilidad** | Evolución de contrato v1→v2 | El productor publica `CotizacionAceptada` **v2** (campo `pais`); notificaciones es un consumidor **v1** | Consumidores rotos = 0; v1 y v2 conviven en el tópico (BACKWARD) |
 | E7 | **Disponibilidad** (crítico) | Caída de la pasarela 30 min | Se mata pagos; sondas al núcleo durante la caída; Pulsar retiene; al volver drena hasta **trabajos**; se **re-inyectan** eventos ya procesados | Núcleo 100% (sondas); perdidos = 0 (RPO=0); RTO medido; duplicados = 0 pese a re-entregas; cadena cerrada N/N |
 
-### E7 en detalle — el escenario crítico
+### E7 en detalle - el escenario crítico
 Es el escenario que protege la promesa del negocio ("una fuga de agua no
 puede esperar"): el cobro es una dependencia externa frágil y NO puede
 arrastrar al núcleo. La POC lo verifica con cuatro mediciones, no con una
@@ -202,7 +202,7 @@ invariantes transaccionales que justifiquen BD común.
 | notificaciones | **CRUD** + dedup | Registro de salida; no requiere historia reconstruible |
 | trabajos | **CRUD** idempotente | Agenda del trabajo confirmado (núcleo); estado simple con unicidad por cotización; regla: no se agenda sin pago retenido |
 
-### 4. DDD en el diseño — estructura del tutorial 7 en los 4 servicios
+### 4. DDD en el diseño - estructura del tutorial 7 en los 4 servicios
 Cada servicio es un paquete Python con la misma anatomía del tutorial del
 curso (`src/<servicio>/`):
 

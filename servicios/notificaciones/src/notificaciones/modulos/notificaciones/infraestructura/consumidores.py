@@ -29,6 +29,18 @@ def _a_comando(mensaje: dict):
         return RegistrarNotificacion(id_evento_origen=mensaje["id"], tipo=tipo, version=v,
                                      destinatario="proveedor",
                                      mensaje=f"Pago de {d.get('monto')} {d.get('moneda')} retenido en escrow")
+    if tipo == "TrabajoRechazado":
+        return RegistrarNotificacion(id_evento_origen=mensaje["id"], tipo=tipo, version=v,
+                                     destinatario="cliente",
+                                     mensaje=f"Su trabajo {d.get('id_trabajo')} no pudo agendarse: {d.get('motivo')}")
+    if tipo == "PagoRevertido":
+        return RegistrarNotificacion(id_evento_origen=mensaje["id"], tipo=tipo, version=v,
+                                     destinatario="cliente",
+                                     mensaje=f"Pago de {d.get('monto')} {d.get('moneda')} liberado del escrow ({d.get('motivo')})")
+    if tipo == "CotizacionRevertida":
+        return RegistrarNotificacion(id_evento_origen=mensaje["id"], tipo=tipo, version=v,
+                                     destinatario="proveedor",
+                                     mensaje=f"La aceptación de la cotización {d.get('id_cotizacion', '')[:8]}… fue revertida")
     if tipo == "TrabajoAgendado":
         return RegistrarNotificacion(id_evento_origen=mensaje["id"], tipo=tipo, version=v,
                                      destinatario="cliente",

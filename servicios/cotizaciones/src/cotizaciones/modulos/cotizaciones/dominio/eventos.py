@@ -25,3 +25,13 @@ class CotizacionAceptada(EventoDominio):
     monto: float = None
     moneda: str = None
     pais: str = None
+
+
+@dataclass
+class CotizacionRevertida(EventoDominio):
+    """Compensación: la aceptación se revierte (vuelve a EMITIDA). Como el
+    agregado es event-sourced, la compensación es un evento MÁS en la
+    historia — nunca se borra el hecho de que fue aceptada."""
+    id_cotizacion: uuid.UUID = None
+    id_trabajo: str = None
+    motivo: str = None

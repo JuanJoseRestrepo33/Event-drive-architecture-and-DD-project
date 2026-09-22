@@ -21,7 +21,7 @@ class MapeadorAgendaDeTrabajo(RepMap):
     def entidad_a_dto(self, entidad: AgendaDeTrabajo) -> AgendaDeTrabajoDTO:
         return AgendaDeTrabajoDTO(id=str(entidad.id), estado=entidad.estado.value,
             id_trabajo=entidad.id_trabajo, id_cotizacion=entidad.id_cotizacion,
-            id_pago=entidad.id_pago, pais=entidad.pais)
+            id_pago=entidad.id_pago, pais=entidad.pais, id_proveedor=entidad.id_proveedor or "")
 
     def dto_a_entidad(self, dto: AgendaDeTrabajoDTO) -> AgendaDeTrabajo:
         entidad = AgendaDeTrabajo()
@@ -29,4 +29,5 @@ class MapeadorAgendaDeTrabajo(RepMap):
         entidad.id_cotizacion = dto.id_cotizacion
         entidad.id_pago = dto.id_pago
         entidad.pais = dto.pais or "CO"
+        entidad.id_proveedor = dto.id_proveedor
         return entidad

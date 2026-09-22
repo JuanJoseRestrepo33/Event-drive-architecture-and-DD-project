@@ -32,3 +32,16 @@ class CotizacionAceptadaPayload:
 class EventoCotizacionAceptada(EventoIntegracion):
     type: str = "CotizacionAceptada"
     data: CotizacionAceptadaPayload = field(default_factory=CotizacionAceptadaPayload)
+
+
+@dataclass
+class CotizacionRevertidaPayload:
+    id_cotizacion: str = ""
+    id_trabajo: str = ""
+    motivo: str = ""
+
+
+@dataclass
+class EventoCotizacionRevertida(EventoIntegracion):
+    type: str = "CotizacionRevertida"
+    data: CotizacionRevertidaPayload = field(default_factory=CotizacionRevertidaPayload)

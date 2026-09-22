@@ -20,3 +20,4 @@ class Dinero(ObjetoValor):
 
 class Estado(str, Enum):
     AGENDADO = "AGENDADO"
+    RECHAZADO = "RECHAZADO"

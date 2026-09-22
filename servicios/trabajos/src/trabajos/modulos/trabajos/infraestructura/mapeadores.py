@@ -5,8 +5,9 @@ from trabajos.seedwork.dominio.repositorios import Mapeador
 from ..dominio.entidades import AgendaDeTrabajo
 from ..dominio.objetos_valor import Dinero, Moneda, Estado
 from .dto import AgendaDeTrabajo as AgendaDeTrabajoDbDTO
-from ..dominio.eventos import TrabajoAgendado
-from .schema.v1.eventos import EventoTrabajoAgendado, TrabajoAgendadoPayload
+from ..dominio.eventos import TrabajoAgendado, TrabajoRechazado
+from .schema.v1.eventos import (EventoTrabajoAgendado, TrabajoAgendadoPayload,
+                                EventoTrabajoRechazado, TrabajoRechazadoPayload)
 
 
 class MapeadorAgendaDeTrabajoInfra(Mapeador):
@@ -21,6 +22,7 @@ class MapeadorAgendaDeTrabajoInfra(Mapeador):
         dto.id_cotizacion = entidad.id_cotizacion
         dto.id_pago = entidad.id_pago
         dto.pais = entidad.pais
+        dto.id_proveedor = entidad.id_proveedor
         return dto
 
     def dto_a_entidad(self, dto: AgendaDeTrabajoDbDTO) -> AgendaDeTrabajo:
@@ -31,6 +33,7 @@ class MapeadorAgendaDeTrabajoInfra(Mapeador):
         e.id_cotizacion = dto.id_cotizacion
         e.id_pago = dto.id_pago
         e.pais = dto.pais
+        e.id_proveedor = dto.id_proveedor
         return e
 
 class MapeadorEventosAgendas(Mapeador):
@@ -38,7 +41,11 @@ class MapeadorEventosAgendas(Mapeador):
     def obtener_tipo(self) -> type:
         return TrabajoAgendado.__class__
 
-    def entidad_a_dto(self, evento: TrabajoAgendado) -> EventoTrabajoAgendado:
+    def entidad_a_dto(self, evento):
+        if isinstance(evento, TrabajoRechazado):
+            return EventoTrabajoRechazado(data=TrabajoRechazadoPayload(
+                id_trabajo=evento.id_trabajo, id_cotizacion=evento.id_cotizacion,
+                id_pago=evento.id_pago, motivo=evento.motivo or ""))
         return EventoTrabajoAgendado(data=TrabajoAgendadoPayload(
             id_agenda=evento.id_agenda, id_trabajo=evento.id_trabajo, id_cotizacion=evento.id_cotizacion,
             id_pago=evento.id_pago, pais=evento.pais))

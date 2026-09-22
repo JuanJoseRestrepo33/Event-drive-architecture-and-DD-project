@@ -12,3 +12,14 @@ class PagoRetenido(EventoDominio):
     monto: float = None
     moneda: str = None
     pais: str = None
+
+
+@dataclass
+class PagoRevertido(EventoDominio):
+    """Compensación: el escrow se libera (la transacción larga falló aguas abajo)."""
+    id_pago: str = None
+    id_cotizacion: str = None
+    id_trabajo: str = None
+    monto: float = None
+    moneda: str = None
+    motivo: str = None

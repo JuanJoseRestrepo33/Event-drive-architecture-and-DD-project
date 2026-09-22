@@ -20,3 +20,4 @@ class Dinero(ObjetoValor):
 
 class Estado(str, Enum):
     RETENIDO = "RETENIDO"
+    LIBERADO = "LIBERADO"      # compensación: escrow devuelto

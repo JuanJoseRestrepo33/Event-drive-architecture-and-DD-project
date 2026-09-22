@@ -9,3 +9,7 @@ class HandlerReservaDePagoIntegracion(Handler):
     @staticmethod
     def handle_pago_retenido(evento):
         Despachador().publicar_evento(evento, 'eventos-pago')
+
+    @staticmethod
+    def handle_pago_revertido(evento):
+        Despachador().publicar_evento(evento, 'eventos-pago')

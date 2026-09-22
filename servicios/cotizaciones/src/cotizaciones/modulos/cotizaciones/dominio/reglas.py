@@ -19,3 +19,12 @@ class SoloEmitidaSePuedeAceptar(ReglaNegocio):
 
     def es_valido(self) -> bool:
         return self.estado == EstadoCotizacion.EMITIDA
+
+
+class SoloAceptadaSePuedeRevertir(ReglaNegocio):
+    def __init__(self, estado, mensaje="Solo una cotización ACEPTADA puede revertirse"):
+        super().__init__(mensaje)
+        self.estado = estado
+
+    def es_valido(self) -> bool:
+        return self.estado == EstadoCotizacion.ACEPTADA

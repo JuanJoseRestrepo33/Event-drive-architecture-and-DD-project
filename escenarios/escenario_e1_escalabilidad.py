@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""ESCENARIO E1 (Escalabilidad — Entrega 3): pico de creación masiva.
+"""ESCENARIO E1 (Escalabilidad — Entrega 3): pico de creación masiva sobre la
+transacción larga (saga orquestada: aceptar -> retener pago -> agendar trabajo).
 
 Réplica a escala POC del pico climático 4x: se inyecta una ráfaga de N
 COMANDOS CrearCotizacion al tópico de comandos, cada creación se acepta
@@ -29,8 +30,9 @@ def aceptar_creadas(msg):
             and msg["data"]["id_trabajo"].startswith(CORRIDA)
             and msg["id"] not in vistos):
         vistos.add(msg["id"])
-        bk.publicar("comandos-cotizacion",
-                    contratos.comando_aceptar_cotizacion(msg["data"]["id_cotizacion"]))
+        d = msg["data"]
+        bk.publicar("comandos-saga", contratos.comando_iniciar_saga(
+            d["id_cotizacion"], d["id_trabajo"], d["id_proveedor"], d["monto"], d["moneda"], "CO"))
 
 # el observador se suscribe ANTES de publicar (una suscripción nueva en Pulsar
 # arranca en Earliest, pero suscribir primero evita cualquier carrera)
@@ -47,7 +49,7 @@ for i in range(N):
 t_pub = time.time() - t0
 print(f"   publicados {N} en {t_pub:.2f}s ({N / t_pub:,.0f} comandos/s) — "
       f"0 rechazos (el broker encola)")
-print("   aceptando cada cotización creada de esta corrida...")
+print("   iniciando la TRANSACCIÓN LARGA (saga) por cada cotización creada de esta corrida...")
 
 dur = esperar(lambda: get(PAGOS + "/stats")["reservas"] >= base_pagos + N,
               timeout=180, descripcion=f"{N} reservas de pago")

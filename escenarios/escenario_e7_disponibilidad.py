@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """ESCENARIO E7 (Disponibilidad — Entrega 3): caída de la pasarela de pagos
-durante 30 min sin pérdida de negocio. ESCENARIO CRÍTICO de la POC.
+durante 30 min sin pérdida de negocio, sobre la TRANSACCIÓN LARGA (saga
+orquestada). ESCENARIO CRÍTICO de la POC.
 
 Réplica a escala POC: se DETIENE el servicio pagos (la dependencia crítica
 del cobro) y se verifica, con mediciones, las 4 respuestas del escenario:
@@ -114,9 +115,10 @@ def observar(msg):
         return
     vistos.add(msg["id"])
     if msg["type"] == "CotizacionCreada":
-        ids_corrida.add(msg["data"]["id_cotizacion"])
-        bk.publicar("comandos-cotizacion",
-                    contratos.comando_aceptar_cotizacion(msg["data"]["id_cotizacion"]))
+        d = msg["data"]
+        ids_corrida.add(d["id_cotizacion"])
+        bk.publicar("comandos-saga", contratos.comando_iniciar_saga(
+            d["id_cotizacion"], d["id_trabajo"], d["id_proveedor"], d["monto"], d["moneda"], "CO"))
         aceptaciones_emitidas += 1
     elif msg["type"] == "CotizacionAceptada":
         aceptados_capturados.append(msg)
@@ -188,8 +190,15 @@ def fase_recuperacion(estado):
     print(f"   tras la re-entrega: reservas {reservas_fin}/{n}, trabajos {trabajos_fin}/{n} "
           f"-> duplicados en pagos = {dup_pagos}, en trabajos = {dup_trab}")
 
+    SAGA = os.getenv("URL_SAGA", "http://localhost:5005")
+    try:
+        sagas = get(SAGA + "/sagas")["sagas"]
+        completadas = sum(1 for sg in sagas if sg["id_cotizacion"] in ids_corrida and sg["estado"] == "COMPLETADA")
+        print(f"   sagas COMPLETADAS de esta corrida (saga log): {completadas}/{n}")
+    except Exception:
+        completadas = n
     ok = (disponibilidad == 100.0 and reservas == n and trabajos == n
-          and dup_pagos == 0 and dup_trab == 0)
+          and dup_pagos == 0 and dup_trab == 0 and completadas == n)
     print(f"== E7 {'CUMPLIDO' if ok else 'FALLIDO'}: núcleo {disponibilidad:.0f}% disponible "
           f"durante la caída · perdidos = {n - reservas} (RPO=0) · RTO = {rto:.1f}s · "
           f"duplicados = {dup_pagos + dup_trab} con {len(estado['capturados'])} re-entregas "

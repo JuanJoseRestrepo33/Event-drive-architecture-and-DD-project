@@ -36,3 +36,12 @@ def evento_cotizacion_aceptada_v2(id_cotizacion, id_trabajo, id_proveedor, monto
     m["data"] = {"id_cotizacion": id_cotizacion, "id_trabajo": id_trabajo,
                  "id_proveedor": id_proveedor, "monto": monto, "moneda": moneda, "pais": pais}
     return m
+
+
+def comando_iniciar_saga(id_cotizacion, id_trabajo, id_proveedor, monto, moneda, pais="CO"):
+    """Arranca la TRANSACCIÓN LARGA (saga orquestada) para una cotización."""
+    m = _base("IniciarSagaAceptacion", "comando", "v1")
+    m["data"] = {"id_cotizacion": id_cotizacion,
+                 "datos": {"id_trabajo": id_trabajo, "id_proveedor": id_proveedor,
+                           "monto": monto, "moneda": moneda, "pais": pais}}
+    return m

@@ -1,5 +1,5 @@
 # Entrega 4 — POC Hogar de los Alpes
-# 4 microservicios + Apache Pulsar (broker de comandos y eventos)
+# 4 microservicios + orquestador de sagas + BFF + Apache Pulsar (broker de comandos y eventos)
 services:
   broker:
     image: apachepulsar/pulsar:3.2.4
@@ -38,6 +38,20 @@ services:
       broker: { condition: service_healthy }
     environment: { BROKER: pulsar, BROKER_HOST: broker }
     ports: ["5004:5004"]
+
+  saga:
+    build: ./servicios/saga
+    depends_on:
+      broker: { condition: service_healthy }
+    environment: { BROKER: pulsar, BROKER_HOST: broker }
+    ports: ["5005:5005"]
+
+  bff:
+    build: ./servicios/bff
+    depends_on:
+      broker: { condition: service_healthy }
+    environment: { BROKER: pulsar, BROKER_HOST: broker }
+    ports: ["5000:5000"]
 
   # Cliente de escenarios (no arranca con `up`; se invoca con `docker compose run`)
   escenarios:

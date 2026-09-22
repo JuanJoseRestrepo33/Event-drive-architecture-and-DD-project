@@ -1,0 +1,2 @@
+flask>=3.0
+pulsar-client>=3.4 ; sys_platform == "linux"

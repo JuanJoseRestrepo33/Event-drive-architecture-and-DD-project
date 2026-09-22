@@ -10,6 +10,7 @@ class AgendaDeTrabajo(db.Model):
     id_cotizacion = db.Column(db.String, nullable=False, unique=True)
     id_pago = db.Column(db.String, nullable=False)
     pais = db.Column(db.String, nullable=False)
+    id_proveedor = db.Column(db.String, nullable=True)
     estado = db.Column(db.String, nullable=False)
 
 

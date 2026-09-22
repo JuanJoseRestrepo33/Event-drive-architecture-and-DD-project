@@ -2,9 +2,11 @@
 from pydispatch import dispatcher
 
 from .handlers import HandlerCotizacionIntegracion
-from cotizaciones.modulos.cotizaciones.dominio.eventos import CotizacionCreada, CotizacionAceptada
+from cotizaciones.modulos.cotizaciones.dominio.eventos import CotizacionCreada, CotizacionAceptada, CotizacionRevertida
 
 dispatcher.connect(HandlerCotizacionIntegracion.handle_cotizacion_creada,
                    signal=f'{CotizacionCreada.__name__}Integracion')
 dispatcher.connect(HandlerCotizacionIntegracion.handle_cotizacion_aceptada,
                    signal=f'{CotizacionAceptada.__name__}Integracion')
+dispatcher.connect(HandlerCotizacionIntegracion.handle_cotizacion_revertida,
+                   signal=f'{CotizacionRevertida.__name__}Integracion')

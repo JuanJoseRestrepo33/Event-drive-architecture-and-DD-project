@@ -14,3 +14,7 @@ class HandlerCotizacionIntegracion(Handler):
     @staticmethod
     def handle_cotizacion_aceptada(evento):
         Despachador().publicar_evento(evento, 'eventos-cotizacion')
+
+    @staticmethod
+    def handle_cotizacion_revertida(evento):
+        Despachador().publicar_evento(evento, 'eventos-cotizacion')

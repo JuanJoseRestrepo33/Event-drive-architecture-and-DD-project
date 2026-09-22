@@ -1,6 +1,7 @@
 """Comando CrearCotizacion (lado C de CQS). Llega por el tópico
 comandos-cotizacion (consumidor) — no por HTTP."""
 from dataclasses import dataclass
+import uuid
 
 from cotizaciones.seedwork.aplicacion.comandos import Comando
 from cotizaciones.seedwork.aplicacion.comandos import ejecutar_commando as comando
@@ -19,6 +20,7 @@ class CrearCotizacion(Comando):
     monto: float
     moneda: str
     pais: str = "CO"
+    id_cotizacion: str = None   # opcional: lo asigna el cliente (BFF) para responder 202 con el id
 
 
 class CrearCotizacionHandler(ComandoCotizacionBaseHandler):
@@ -27,6 +29,8 @@ class CrearCotizacionHandler(ComandoCotizacionBaseHandler):
         dto = CotizacionDTO(id_trabajo=comando.id_trabajo, id_proveedor=comando.id_proveedor,
                             monto=comando.monto, moneda=comando.moneda, pais=comando.pais)
         cotizacion: Cotizacion = self.fabrica_cotizaciones.crear_objeto(dto, MapeadorCotizacion())
+        if comando.id_cotizacion:
+            cotizacion._id = uuid.UUID(comando.id_cotizacion)   # identidad decidida por el cliente
         cotizacion.crear_cotizacion(cotizacion)          # regla + evento CotizacionCreada
 
         repositorio = self.fabrica_repositorio.crear_objeto(RepositorioCotizaciones)

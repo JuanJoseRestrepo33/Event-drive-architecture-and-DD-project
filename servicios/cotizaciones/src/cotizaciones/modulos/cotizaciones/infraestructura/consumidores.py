@@ -8,15 +8,20 @@ from cotizaciones.seedwork.dominio.excepciones import ExcepcionDominio
 from cotizaciones.seedwork.infraestructura.broker import broker
 from ..aplicacion.comandos.crear_cotizacion import CrearCotizacion
 from ..aplicacion.comandos.aceptar_cotizacion import AceptarCotizacion
+from ..aplicacion.comandos.revertir_aceptacion import RevertirAceptacion
 
 
 def _a_comando(mensaje: dict):
     d = mensaje.get("data", {})
     if mensaje.get("type") == "CrearCotizacion":
         return CrearCotizacion(id_trabajo=d["id_trabajo"], id_proveedor=d["id_proveedor"],
-                               monto=d["monto"], moneda=d["moneda"], pais=d.get("pais", "CO"))
+                               monto=d["monto"], moneda=d["moneda"], pais=d.get("pais", "CO"),
+                               id_cotizacion=d.get("id_cotizacion"))
     if mensaje.get("type") == "AceptarCotizacion":
         return AceptarCotizacion(id_cotizacion=d["id_cotizacion"])
+    if mensaje.get("type") == "RevertirAceptacion":
+        return RevertirAceptacion(id_cotizacion=d["id_cotizacion"],
+                                  motivo=d.get("motivo", "compensacion de saga"))
     return None
 
 

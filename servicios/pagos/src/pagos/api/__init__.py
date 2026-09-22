@@ -17,8 +17,7 @@ def importar_modelos_alchemy():
 def comenzar_consumidor(app):
     """Suscripciones al broker en hilos (tópico de comandos + tópicos de eventos)."""
     import pagos.modulos.pagos.infraestructura.consumidores as consumidores
-    for objetivo in (consumidores.suscribirse_a_comandos,
-                     consumidores.suscribirse_a_eventos_cotizacion,):
+    for objetivo in (consumidores.suscribirse_a_comandos,):
         threading.Thread(target=objetivo, args=(app,), daemon=True).start()
 
 

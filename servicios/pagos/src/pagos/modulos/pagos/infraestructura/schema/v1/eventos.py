@@ -18,3 +18,19 @@ class PagoRetenidoPayload:
 class EventoPagoRetenido(EventoIntegracion):
     type: str = "PagoRetenido"
     data: PagoRetenidoPayload = field(default_factory=PagoRetenidoPayload)
+
+
+@dataclass
+class PagoRevertidoPayload:
+    id_pago: str = ""
+    id_cotizacion: str = ""
+    id_trabajo: str = ""
+    monto: float = 0.0
+    moneda: str = ""
+    motivo: str = ""
+
+
+@dataclass
+class EventoPagoRevertido(EventoIntegracion):
+    type: str = "PagoRevertido"
+    data: PagoRevertidoPayload = field(default_factory=PagoRevertidoPayload)

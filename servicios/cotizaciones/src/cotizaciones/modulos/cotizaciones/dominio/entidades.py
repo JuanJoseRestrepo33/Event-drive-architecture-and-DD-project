@@ -11,8 +11,8 @@ import uuid
 
 from cotizaciones.seedwork.dominio.entidades import AgregacionRaiz
 from .objetos_valor import Dinero, Moneda, EstadoCotizacion
-from .eventos import CotizacionCreada, CotizacionAceptada
-from .reglas import SoloEmitidaSePuedeAceptar
+from .eventos import CotizacionCreada, CotizacionAceptada, CotizacionRevertida
+from .reglas import SoloEmitidaSePuedeAceptar, SoloAceptadaSePuedeRevertir
 
 
 @dataclass
@@ -40,6 +40,13 @@ class Cotizacion(AgregacionRaiz):
             moneda=self.valor.moneda.value, pais=self.pais))
         self.aplicar(self.eventos[-1])
 
+    def revertir_aceptacion(self, motivo: str = "compensacion de saga"):
+        """COMPENSACIÓN: deshace la aceptación con un evento nuevo (append)."""
+        self.validar_regla(SoloAceptadaSePuedeRevertir(self.estado))
+        self.agregar_evento(CotizacionRevertida(
+            id_cotizacion=self.id, id_trabajo=self.id_trabajo, motivo=motivo))
+        self.aplicar(self.eventos[-1])
+
     # ------------------------- event sourcing -------------------------
     def aplicar(self, evento):
         """El estado SIEMPRE deriva de los eventos (nunca se asigna directo)."""
@@ -53,6 +60,8 @@ class Cotizacion(AgregacionRaiz):
             self.estado = EstadoCotizacion.EMITIDA
         elif isinstance(evento, CotizacionAceptada):
             self.estado = EstadoCotizacion.ACEPTADA
+        elif isinstance(evento, CotizacionRevertida):
+            self.estado = EstadoCotizacion.EMITIDA
         self.version += 1
 
     @classmethod

@@ -10,3 +10,12 @@ class MontoDebeSerPositivo(ReglaNegocio):
 
     def es_valido(self) -> bool:
         return self.valor is not None and self.valor.monto > 0
+
+
+class SoloRetenidoSePuedeRevertir(ReglaNegocio):
+    def __init__(self, estado, mensaje="Solo un pago RETENIDO puede revertirse"):
+        super().__init__(mensaje)
+        self.estado = estado
+
+    def es_valido(self) -> bool:
+        return str(getattr(self.estado, "value", self.estado)) == "RETENIDO"

@@ -17,3 +17,17 @@ class TrabajoAgendadoPayload:
 class EventoTrabajoAgendado(EventoIntegracion):
     type: str = "TrabajoAgendado"
     data: TrabajoAgendadoPayload = field(default_factory=TrabajoAgendadoPayload)
+
+
+@dataclass
+class TrabajoRechazadoPayload:
+    id_trabajo: str = ""
+    id_cotizacion: str = ""
+    id_pago: str = ""
+    motivo: str = ""
+
+
+@dataclass
+class EventoTrabajoRechazado(EventoIntegracion):
+    type: str = "TrabajoRechazado"
+    data: TrabajoRechazadoPayload = field(default_factory=TrabajoRechazadoPayload)

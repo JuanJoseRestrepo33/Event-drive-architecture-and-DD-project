@@ -4,10 +4,11 @@ import uuid
 
 from cotizaciones.seedwork.dominio.repositorios import Mapeador
 from ..dominio.entidades import Cotizacion
-from ..dominio.eventos import CotizacionCreada, CotizacionAceptada
+from ..dominio.eventos import CotizacionCreada, CotizacionAceptada, CotizacionRevertida
 from ..dominio.objetos_valor import Dinero, Moneda, EstadoCotizacion
 from .dto import Cotizacion as CotizacionDbDTO
-from .schema.v1.eventos import EventoCotizacionCreada, CotizacionCreadaPayload
+from .schema.v1.eventos import (EventoCotizacionCreada, CotizacionCreadaPayload,
+                                EventoCotizacionRevertida, CotizacionRevertidaPayload)
 from .schema.v2.eventos import EventoCotizacionAceptadaV2, CotizacionAceptadaPayloadV2
 
 
@@ -46,7 +47,8 @@ class MapeadorEventosCotizacion(Mapeador):
 
     def __init__(self):
         self.router = {CotizacionCreada: self._creada_a_integracion,
-                       CotizacionAceptada: self._aceptada_a_integracion}
+                       CotizacionAceptada: self._aceptada_a_integracion,
+                       CotizacionRevertida: self._revertida_a_integracion}
 
     def obtener_tipo(self) -> type:
         return CotizacionCreada.__class__
@@ -64,6 +66,11 @@ class MapeadorEventosCotizacion(Mapeador):
             id_cotizacion=str(evento.id_cotizacion), id_trabajo=evento.id_trabajo,
             id_proveedor=evento.id_proveedor, monto=evento.monto, moneda=evento.moneda,
             pais=evento.pais or "CO"))
+
+    def _revertida_a_integracion(self, evento: CotizacionRevertida) -> EventoCotizacionRevertida:
+        return EventoCotizacionRevertida(data=CotizacionRevertidaPayload(
+            id_cotizacion=str(evento.id_cotizacion), id_trabajo=evento.id_trabajo,
+            motivo=evento.motivo or ""))
 
     def entidad_a_dto(self, entidad, version=LATEST_VERSION):
         func = self.router.get(type(entidad))

@@ -24,6 +24,10 @@ class RepositorioReservasSQLAlchemy(RepositorioReservas):
     def contar(self) -> int:
         return db.session.query(ReservaDePagoDbDTO).count()
 
+    def obtener_por_cotizacion(self, id_cotizacion: str):
+        dto = db.session.query(ReservaDePagoDbDTO).filter_by(id_cotizacion=id_cotizacion).one_or_none()
+        return None if dto is None else self._fabrica.crear_objeto(dto, MapeadorReservaDePagoInfra())
+
     def agregar(self, entidad):
         db.session.add(self._fabrica.crear_objeto(entidad, MapeadorReservaDePagoInfra()))
 

@@ -9,6 +9,10 @@ class RepositorioReservas(Repositorio, ABC):
     def contar(self) -> int:
         ...
 
+    @abstractmethod
+    def obtener_por_cotizacion(self, id_cotizacion: str):
+        ...
+
 
 class RepositorioEventosProcesados(ABC):
     """Puerto de IDEMPOTENCIA: registra los ids de mensajes ya consumidos

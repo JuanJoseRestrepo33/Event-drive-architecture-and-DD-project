@@ -6,7 +6,7 @@ from cotizaciones.config.db import db
 from ..dominio.repositorios import RepositorioCotizaciones, RepositorioEventosCotizaciones
 from ..dominio.fabricas import FabricaCotizaciones
 from ..dominio.entidades import Cotizacion
-from ..dominio.eventos import CotizacionCreada, CotizacionAceptada
+from ..dominio.eventos import CotizacionCreada, CotizacionAceptada, CotizacionRevertida
 from .dto import Cotizacion as CotizacionDbDTO, EventosCotizacion
 from .mapeadores import MapeadorCotizacionInfra, MapeadorEventosCotizacion
 
@@ -51,7 +51,8 @@ class RepositorioEventosCotizacionSQLAlchemy(RepositorioEventosCotizaciones):
     """EVENT STORE: cada evento de dominio se persiste como registro
     versionado e inmutable (la UoW lo invoca vía `repositorio_eventos_func`).
     `reconstruir` reproduce la historia para obtener el agregado."""
-    TIPOS = {"CotizacionCreada": CotizacionCreada, "CotizacionAceptada": CotizacionAceptada}
+    TIPOS = {"CotizacionCreada": CotizacionCreada, "CotizacionAceptada": CotizacionAceptada,
+             "CotizacionRevertida": CotizacionRevertida}
 
     def __init__(self):
         self._mapeador = MapeadorEventosCotizacion()
@@ -88,10 +89,14 @@ class RepositorioEventosCotizacionSQLAlchemy(RepositorioEventosCotizaciones):
         fila.tipo_evento = evento.__class__.__name__
         fila.formato_contenido = 'JSON'
         fila.nombre_servicio = str(integracion.service_name)
-        fila.contenido = json.dumps({
-            "id_cotizacion": str(evento.id_cotizacion), "id_trabajo": evento.id_trabajo,
-            "id_proveedor": evento.id_proveedor, "monto": evento.monto,
-            "moneda": evento.moneda, "pais": evento.pais})
+        if isinstance(evento, CotizacionRevertida):
+            fila.contenido = json.dumps({"id_cotizacion": str(evento.id_cotizacion),
+                                         "id_trabajo": evento.id_trabajo, "motivo": evento.motivo})
+        else:
+            fila.contenido = json.dumps({
+                "id_cotizacion": str(evento.id_cotizacion), "id_trabajo": evento.id_trabajo,
+                "id_proveedor": evento.id_proveedor, "monto": evento.monto,
+                "moneda": evento.moneda, "pais": evento.pais})
         db.session.add(fila)
 
     def actualizar(self, evento):

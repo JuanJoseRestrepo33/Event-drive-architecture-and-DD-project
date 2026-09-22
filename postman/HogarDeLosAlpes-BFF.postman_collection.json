@@ -1,0 +1,1182 @@
+{
+  "info": {
+    "_postman_id": "3fd754b4-e654-4f2d-9a6a-29e723b8ef5a",
+    "name": "Hogar de los Alpes — BFF + Saga (Entrega 5)",
+    "description": "Collection para interactuar con la POC a través del BFF (puerto 5000).\n\n**Cómo se usa el sistema:** las escrituras (POST) publican COMANDOS a Apache Pulsar y responden `202 Accepted` con el `id` del recurso; el efecto se ve DESPUÉS en las lecturas (GET), que son queries síncronas compuestas por el BFF. Es CQS + consistencia eventual: tras un POST, espere ~1-2 s antes del GET (la carpeta *Flujo principal* ya lo hace en los pre-request).\n\n**Orden recomendado:** ejecute con el Runner las carpetas `1. Transacción larga EXITOSA` y `2. Transacción larga con FALLO y COMPENSACIÓN` — cada request guarda variables que usan las siguientes. `POST /bff/cotizaciones/{id}/aceptar` inicia la SAGA orquestada (aceptar → retener pago → agendar trabajo); `GET /bff/sagas/{id}/log` muestra el SAGA LOG con cada paso y compensación.\n\nEnvironments incluidos: `local` (http://localhost:5000) y `gcp` (http://<IP_VM>:5000).",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:5000"
+    },
+    {
+      "key": "id_cotizacion",
+      "value": ""
+    },
+    {
+      "key": "id_pago",
+      "value": ""
+    },
+    {
+      "key": "id_trabajo",
+      "value": ""
+    },
+    {
+      "key": "id_saga",
+      "value": ""
+    },
+    {
+      "key": "id_cotizacion_ko",
+      "value": ""
+    },
+    {
+      "key": "id_saga_ko",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "0. Salud",
+      "item": [
+        {
+          "name": "Health del BFF y de los 4 servicios",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/bff/health",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "bff",
+                "health"
+              ]
+            },
+            "description": "El BFF consulta /health de cada microservicio. 503 si alguno está caído (útil durante el escenario E7)."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200: BFF y los 4 microservicios arriba', () => pm.response.to.have.status(200));",
+                  "const b = pm.response.json();",
+                  "['bff','cotizaciones','pagos','trabajos','notificaciones','saga'].forEach(s => pm.test(s + ' up', () => pm.expect(b[s]).to.eql('up')));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Stats (conteos por servicio)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/bff/stats",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "bff",
+                "stats"
+              ]
+            },
+            "description": "eventos_en_store (event sourcing en cotizaciones), reservas, trabajos_agendados, notificaciones."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "1. Transacción larga EXITOSA (saga orquestada)",
+      "description": "Cotización aceptada → pago retenido (escrow) → trabajo agendado. Correr en orden (Runner).",
+      "item": [
+        {
+          "name": "1.1 Crear cotización  →  COMANDO CrearCotizacion",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/bff/cotizaciones",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "bff",
+                "cotizaciones"
+              ]
+            },
+            "description": "Publica `CrearCotizacion` en `comandos-cotizacion`. El BFF genera el `id` y lo devuelve en el 202. Proveedor `PRV-7` tiene disponibilidad → la transacción larga terminará bien.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id_trabajo\": \"TRB-{{$randomInt}}\",\n  \"id_proveedor\": \"PRV-7\",\n  \"monto\": 220000,\n  \"moneda\": \"MXN\",\n  \"pais\": \"MX\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('202 Accepted: el comando fue publicado al tópico', () => pm.response.to.have.status(202));",
+                  "const b = pm.response.json();",
+                  "pm.test('respuesta con estado ACEPTADO, id y tópico', () => {",
+                  "  pm.expect(b.estado).to.eql('ACEPTADO'); pm.expect(b.id).to.be.a('string'); pm.expect(b.topico).to.be.a('string');",
+                  "});",
+                  "pm.collectionVariables.set('id_cotizacion', b.id);",
+                  "pm.collectionVariables.set('id_trabajo', JSON.parse(pm.request.body.raw).id_trabajo);",
+                  "pm.test('el comando fue al tópico comandos-cotizacion', () => pm.expect(b.topico).to.eql('comandos-cotizacion'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "1.2 Consultar cotización (query → proyección)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/bff/cotizaciones/{{id_cotizacion}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "bff",
+                "cotizaciones",
+                "{{id_cotizacion}}"
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// espera 1500 ms: el comando anterior se procesa de forma asíncrona (consistencia eventual)",
+                  "setTimeout(() => {}, 1500);"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200: la proyección ya refleja el comando', () => pm.response.to.have.status(200));",
+                  "const b = pm.response.json();",
+                  "pm.test('estado EMITIDA y version 1', () => { pm.expect(b.estado).to.eql('EMITIDA'); pm.expect(b.version).to.eql(1); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "1.3 Aceptar cotización  →  INICIA LA SAGA (IniciarSagaAceptacion)",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/bff/cotizaciones/{{id_cotizacion}}/aceptar",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "bff",
+                "cotizaciones",
+                "{{id_cotizacion}}",
+                "aceptar"
+              ]
+            },
+            "description": "La capacidad de negocio 'aceptar cotización' ES la transacción larga. El BFF publica `IniciarSagaAceptacion` al orquestador, que envía en orden: `AceptarCotizacion` → `RetenerPago` → `AgendarTrabajo`, esperando el evento de cada paso."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('202 Accepted: el comando fue publicado al tópico', () => pm.response.to.have.status(202));",
+                  "const b = pm.response.json();",
+                  "pm.test('respuesta con estado ACEPTADO, id y tópico', () => {",
+                  "  pm.expect(b.estado).to.eql('ACEPTADO'); pm.expect(b.id).to.be.a('string'); pm.expect(b.topico).to.be.a('string');",
+                  "});",
+                  "pm.test('el BFF devolvió id_saga y el comando fue a comandos-saga', () => { pm.expect(b.id_saga).to.be.a('string'); pm.expect(b.topico).to.eql('comandos-saga'); });",
+                  "pm.collectionVariables.set('id_saga', b.id_saga);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "1.4 Estado de la SAGA (orquestador)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/bff/sagas/{{id_saga}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "bff",
+                "sagas",
+                "{{id_saga}}"
+              ]
+            },
+            "description": "Estado actual de la saga: `estado` ∈ EN_CURSO → COMPLETADA | COMPENSANDO → COMPENSADA. Si aún está EN_CURSO, reenviar (consistencia eventual)."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// espera 3000 ms: el comando anterior se procesa de forma asíncrona (consistencia eventual)",
+                  "setTimeout(() => {}, 3000);"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const b = pm.response.json();",
+                  "pm.test('saga COMPLETADA', () => pm.expect(b.estado).to.eql('COMPLETADA'));",
+                  "pm.test('3 pasos completados en orden', () => pm.expect(b.pasos_completados).to.eql(['ACEPTAR_COTIZACION','RETENER_PAGO','AGENDAR_TRABAJO']));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "1.5 SAGA LOG de la transacción (cada paso, comando y evento)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/bff/sagas/{{id_saga}}/log",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "bff",
+                "sagas",
+                "{{id_saga}}",
+                "log"
+              ]
+            },
+            "description": "El SAGA LOG es la tabla `saga_log` del orquestador (append-only): una fila por transición — INICIO, COMANDO_ENVIADO, EVENTO_RECIBIDO, PASO_OK/PASO_FALLIDO, COMPENSACION_ENVIADA/OK, FIN — con paso, servicio, mensaje y payload. Consultable también con SQL (docs/SAGA.md)."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const b = pm.response.json();",
+                  "pm.test('el log empieza en INICIO y termina en FIN COMPLETADA', () => {",
+                  "  pm.expect(b.log[0].tipo).to.eql('INICIO'); const u = b.log[b.log.length-1]; pm.expect(u.tipo).to.eql('FIN'); pm.expect(u.mensaje).to.eql('COMPLETADA');",
+                  "});",
+                  "pm.test('3 PASO_OK y ninguna compensación', () => {",
+                  "  pm.expect(b.log.filter(e => e.tipo==='PASO_OK').length).to.eql(3);",
+                  "  pm.expect(b.log.filter(e => e.tipo.startsWith('COMPENSACION')).length).to.eql(0);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "1.6 Estado consolidado del negocio",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/bff/cotizaciones/{{id_cotizacion}}/estado",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "bff",
+                "cotizaciones",
+                "{{id_cotizacion}}",
+                "estado"
+              ]
+            },
+            "description": "Vista compuesta por el BFF: cotización + pago + trabajo + notificaciones + resumen de la saga."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const b = pm.response.json();",
+                  "pm.test('fase TRABAJO_AGENDADO', () => pm.expect(b.fase).to.eql('TRABAJO_AGENDADO'));",
+                  "pm.test('pago RETENIDO y trabajo AGENDADO', () => { pm.expect(b.pago.estado).to.eql('RETENIDO'); pm.expect(b.trabajo.estado).to.eql('AGENDADO'); });",
+                  "pm.collectionVariables.set('id_pago', b.pago.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "1.7 Historia del agregado (event sourcing)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/bff/cotizaciones/{{id_cotizacion}}/historia",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "bff",
+                "cotizaciones",
+                "{{id_cotizacion}}",
+                "historia"
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const b = pm.response.json();",
+                  "pm.test('eventos: Creada v1, Aceptada v2', () => pm.expect(b.historia.map(e => e.tipo)).to.eql(['CotizacionCreada','CotizacionAceptada']));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "2. Transacción larga con FALLO y COMPENSACIÓN",
+      "description": "El proveedor PRV-SIN-CUPO no tiene disponibilidad: trabajos rechaza el agendamiento y la saga compensa en orden inverso (libera el pago, revierte la aceptación).",
+      "item": [
+        {
+          "name": "2.1 Crear cotización con proveedor SIN CUPO",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/bff/cotizaciones",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "bff",
+                "cotizaciones"
+              ]
+            },
+            "description": "Regla de negocio del núcleo (trabajos): `ProveedorDebeTenerDisponibilidad`. `PRV-SIN-CUPO` la incumple → el paso 3 de la saga fallará.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id_trabajo\": \"TRB-KO-{{$randomInt}}\",\n  \"id_proveedor\": \"PRV-SIN-CUPO\",\n  \"monto\": 150000,\n  \"moneda\": \"COP\",\n  \"pais\": \"CO\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('202 Accepted: el comando fue publicado al tópico', () => pm.response.to.have.status(202));",
+                  "const b = pm.response.json();",
+                  "pm.test('respuesta con estado ACEPTADO, id y tópico', () => {",
+                  "  pm.expect(b.estado).to.eql('ACEPTADO'); pm.expect(b.id).to.be.a('string'); pm.expect(b.topico).to.be.a('string');",
+                  "});",
+                  "pm.collectionVariables.set('id_cotizacion_ko', b.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "2.2 Aceptar  →  INICIA LA SAGA (fallará en el paso 3)",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/bff/cotizaciones/{{id_cotizacion_ko}}/aceptar",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "bff",
+                "cotizaciones",
+                "{{id_cotizacion_ko}}",
+                "aceptar"
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// espera 1500 ms: el comando anterior se procesa de forma asíncrona (consistencia eventual)",
+                  "setTimeout(() => {}, 1500);"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('202 Accepted: el comando fue publicado al tópico', () => pm.response.to.have.status(202));",
+                  "const b = pm.response.json();",
+                  "pm.test('respuesta con estado ACEPTADO, id y tópico', () => {",
+                  "  pm.expect(b.estado).to.eql('ACEPTADO'); pm.expect(b.id).to.be.a('string'); pm.expect(b.topico).to.be.a('string');",
+                  "});",
+                  "pm.collectionVariables.set('id_saga_ko', b.id_saga);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "2.3 Estado de la SAGA → COMPENSADA",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/bff/sagas/{{id_saga_ko}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "bff",
+                "sagas",
+                "{{id_saga_ko}}"
+              ]
+            },
+            "description": "Si aún dice COMPENSANDO, reenviar: las compensaciones viajan por Pulsar y se confirman por eventos."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// espera 4000 ms: el comando anterior se procesa de forma asíncrona (consistencia eventual)",
+                  "setTimeout(() => {}, 4000);"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const b = pm.response.json();",
+                  "pm.test('saga COMPENSADA (no COMPLETADA)', () => pm.expect(b.estado).to.eql('COMPENSADA'));",
+                  "pm.test('motivo del fallo registrado', () => pm.expect(b.motivo_fallo).to.include('disponibilidad'));",
+                  "pm.test('ningún paso queda completado tras compensar', () => pm.expect(b.pasos_completados).to.eql([]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "2.4 SAGA LOG con las compensaciones en orden inverso",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/bff/sagas/{{id_saga_ko}}/log",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "bff",
+                "sagas",
+                "{{id_saga_ko}}",
+                "log"
+              ]
+            },
+            "description": "Secuencia esperada: INICIO → (AceptarCotizacion ✓) → (RetenerPago ✓) → AgendarTrabajo ✗ TrabajoRechazado → RevertirPago → PagoRevertido ✓ → RevertirAceptacion → CotizacionRevertida ✓ → FIN COMPENSADA."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const b = pm.response.json(); const tipos = b.log.map(e => e.tipo);",
+                  "pm.test('PASO_FALLIDO en AGENDAR_TRABAJO', () => { const f = b.log.find(e => e.tipo==='PASO_FALLIDO'); pm.expect(f.paso).to.eql('AGENDAR_TRABAJO'); pm.expect(f.mensaje).to.eql('TrabajoRechazado'); });",
+                  "pm.test('compensaciones en orden inverso: pago primero, luego cotización', () => {",
+                  "  const c = b.log.filter(e => e.tipo==='COMPENSACION_ENVIADA').map(e => e.mensaje);",
+                  "  pm.expect(c).to.eql(['RevertirPago','RevertirAceptacion']);",
+                  "});",
+                  "pm.test('ambas compensaciones confirmadas (COMPENSACION_OK x2) y FIN COMPENSADA', () => {",
+                  "  pm.expect(b.log.filter(e => e.tipo==='COMPENSACION_OK').length).to.eql(2);",
+                  "  pm.expect(b.log[b.log.length-1].mensaje).to.eql('COMPENSADA');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "2.5 Estado consolidado: sistema consistente tras compensar",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/bff/cotizaciones/{{id_cotizacion_ko}}/estado",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "bff",
+                "cotizaciones",
+                "{{id_cotizacion_ko}}",
+                "estado"
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const b = pm.response.json();",
+                  "pm.test('fase COMPENSADA', () => pm.expect(b.fase).to.eql('COMPENSADA'));",
+                  "pm.test('cotización volvió a EMITIDA', () => pm.expect(b.cotizacion.estado).to.eql('EMITIDA'));",
+                  "pm.test('pago LIBERADO (escrow devuelto)', () => pm.expect(b.pago.estado).to.eql('LIBERADO'));",
+                  "pm.test('trabajo RECHAZADO', () => pm.expect(b.trabajo.estado).to.eql('RECHAZADO'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "2.6 Historia event-sourced: la compensación es un evento más",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/bff/cotizaciones/{{id_cotizacion_ko}}/historia",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "bff",
+                "cotizaciones",
+                "{{id_cotizacion_ko}}",
+                "historia"
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const b = pm.response.json();",
+                  "pm.test('Creada → Aceptada → Revertida (nunca se borra historia)', () => pm.expect(b.historia.map(e => e.tipo)).to.eql(['CotizacionCreada','CotizacionAceptada','CotizacionRevertida']));",
+                  "pm.test('replay reconstruye EMITIDA', () => pm.expect(b.reconstruida_por_replay.estado).to.eql('EMITIDA'));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "3. Monitoreo de sagas (Saga Log)",
+      "item": [
+        {
+          "name": "Todas las sagas y conteo por estado",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/bff/sagas",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "bff",
+                "sagas"
+              ]
+            },
+            "description": "Equivale a `SELECT estado, COUNT(*) FROM sagas GROUP BY estado`."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const b = pm.response.json();",
+                  "pm.test('hay al menos una COMPLETADA y una COMPENSADA', () => { pm.expect(b.por_estado.COMPLETADA).to.be.at.least(1); pm.expect(b.por_estado.COMPENSADA).to.be.at.least(1); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Últimas 30 entradas del Saga Log (todas las sagas)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/bff/sagas/log?n=30",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "bff",
+                "sagas",
+                "log?n=30"
+              ]
+            },
+            "description": "Equivale a `SELECT * FROM saga_log ORDER BY id DESC LIMIT 30`."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Saga por id de cotización",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/bff/sagas/{{id_cotizacion}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "bff",
+                "sagas",
+                "{{id_cotizacion}}"
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200: se puede buscar por id_cotizacion o por id_saga', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "4. Consultas por servicio",
+      "item": [
+        {
+          "name": "Reservas de pago (servicio pagos)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/bff/reservas",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "bff",
+                "reservas"
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.test('contiene la reserva del flujo exitoso (RETENIDO) y la del compensado (LIBERADO)', () => { const r = pm.response.json(); pm.expect(r.some(x => x.id_cotizacion === pm.collectionVariables.get('id_cotizacion') && x.estado==='RETENIDO')).to.be.true; pm.expect(r.some(x => x.id_cotizacion === pm.collectionVariables.get('id_cotizacion_ko') && x.estado==='LIBERADO')).to.be.true; });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Trabajos agendados (servicio trabajos)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/bff/trabajos",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "bff",
+                "trabajos"
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.test('contiene el trabajo del flujo', () => pm.expect(pm.response.json().some(t => t.id_cotizacion === pm.collectionVariables.get('id_cotizacion'))).to.be.true);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Notificaciones (servicio notificaciones)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/bff/notificaciones",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "bff",
+                "notificaciones"
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.test('hay notificaciones v1 y v2 (consumidor v1 tolerante)', () => { const v = new Set(pm.response.json().map(n => n.version)); pm.expect(v.has('v1') || v.has('v2')).to.be.true; });"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "5. Comandos directos a servicios (lo que hace el orquestador)",
+      "description": "Cada servicio tiene su propio tópico de comandos. Estos endpoints los publican directamente, igual que hace el orquestador.",
+      "item": [
+        {
+          "name": "Retener pago  →  COMANDO RetenerPago (tópico comandos-pago)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/bff/pagos/retener",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "bff",
+                "pagos",
+                "retener"
+              ]
+            },
+            "description": "Publica `RetenerPago` sin pasar por cotizaciones. Pagos crea el escrow y publica `PagoRetenido` → trabajos agenda.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id_cotizacion\": \"{{$guid}}\",\n  \"id_trabajo\": \"TRB-DIRECTO-{{$randomInt}}\",\n  \"monto\": 50000,\n  \"moneda\": \"COP\",\n  \"pais\": \"CO\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('202 Accepted: el comando fue publicado al tópico', () => pm.response.to.have.status(202));",
+                  "const b = pm.response.json();",
+                  "pm.test('respuesta con estado ACEPTADO, id y tópico', () => {",
+                  "  pm.expect(b.estado).to.eql('ACEPTADO'); pm.expect(b.id).to.be.a('string'); pm.expect(b.topico).to.be.a('string');",
+                  "});",
+                  "pm.test('tópico comandos-pago', () => pm.expect(b.topico).to.eql('comandos-pago'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Agendar trabajo  →  COMANDO AgendarTrabajo (tópico comandos-trabajo)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/bff/trabajos/agendar",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "bff",
+                "trabajos",
+                "agendar"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id_trabajo\": \"TRB-DIRECTO-{{$randomInt}}\",\n  \"id_cotizacion\": \"{{$guid}}\",\n  \"id_pago\": \"{{$guid}}\",\n  \"pais\": \"AR\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('202 Accepted: el comando fue publicado al tópico', () => pm.response.to.have.status(202));",
+                  "const b = pm.response.json();",
+                  "pm.test('respuesta con estado ACEPTADO, id y tópico', () => {",
+                  "  pm.expect(b.estado).to.eql('ACEPTADO'); pm.expect(b.id).to.be.a('string'); pm.expect(b.topico).to.be.a('string');",
+                  "});",
+                  "pm.test('tópico comandos-trabajo', () => pm.expect(b.topico).to.eql('comandos-trabajo'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Agendar trabajo SIN pago → rechazado por regla DebeExistirPagoRetenido",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/bff/trabajos/agendar",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "bff",
+                "trabajos",
+                "agendar"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id_trabajo\": \"TRB-SIN-PAGO\",\n  \"id_cotizacion\": \"{{$guid}}\",\n  \"id_pago\": \"\",\n  \"pais\": \"CO\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('202 Accepted: el comando fue publicado al tópico', () => pm.response.to.have.status(202));",
+                  "const b = pm.response.json();",
+                  "pm.test('respuesta con estado ACEPTADO, id y tópico', () => {",
+                  "  pm.expect(b.estado).to.eql('ACEPTADO'); pm.expect(b.id).to.be.a('string'); pm.expect(b.topico).to.be.a('string');",
+                  "});",
+                  "// 202 (aceptado para procesar); trabajos lo rechaza: ver logs 'RECHAZADO por regla'"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "6. Validaciones y errores",
+      "item": [
+        {
+          "name": "Crear cotización sin campos → 400",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/bff/cotizaciones",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "bff",
+                "cotizaciones"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"monto\": 1\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400 Bad Request', () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Cotización inexistente → 404",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/bff/cotizaciones/00000000-0000-0000-0000-000000000000",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "bff",
+                "cotizaciones",
+                "00000000-0000-0000-0000-000000000000"
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('404 Not Found', () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Monto negativo → 202 pero RECHAZADO por regla MontoDebeSerPositivo",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/bff/cotizaciones",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "bff",
+                "cotizaciones"
+              ]
+            },
+            "description": "El BFF no valida reglas de negocio (pertenecen al dominio). Cotizaciones rechaza el comando; el recurso nunca existe (ver siguiente request).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id_trabajo\": \"TRB-NEG\",\n  \"id_proveedor\": \"PRV-1\",\n  \"monto\": -5,\n  \"moneda\": \"COP\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('202 Accepted: el comando fue publicado al tópico', () => pm.response.to.have.status(202));",
+                  "const b = pm.response.json();",
+                  "pm.test('respuesta con estado ACEPTADO, id y tópico', () => {",
+                  "  pm.expect(b.estado).to.eql('ACEPTADO'); pm.expect(b.id).to.be.a('string'); pm.expect(b.topico).to.be.a('string');",
+                  "});",
+                  "pm.collectionVariables.set('id_rechazada', b.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "La cotización rechazada no existe → 404",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/bff/cotizaciones/{{id_rechazada}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "bff",
+                "cotizaciones",
+                "{{id_rechazada}}"
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// espera 1500 ms: el comando anterior se procesa de forma asíncrona (consistencia eventual)",
+                  "setTimeout(() => {}, 1500);"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('404: la regla del dominio impidió crearla', () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
